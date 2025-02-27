@@ -1,5 +1,6 @@
 from ._samplers import (PatchSampler,
-                        BlueNoisePatchSampler)
+                        BlueNoisePatchSampler,
+                        CentroidPatchSampler)
 
 from ._maskfuncs import (MaskGenerator,
                          WSITissueMaskGenerator)
@@ -38,6 +39,7 @@ __all__ = ['DatasetSpecs',
            'chained_zarrdataset_worker_init_fn',
            'PatchSampler',
            'BlueNoisePatchSampler',
+           'CentroidPatchSampler',
            'ToDtype',
            'parse_rois',
            'parse_metadata',

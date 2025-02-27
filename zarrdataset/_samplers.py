@@ -598,3 +598,92 @@ class BlueNoisePatchSampler(PatchSampler):
         toplefts = self._base_chunk_tls[mask_samplable_pos]
 
         return toplefts
+
+class CentroidPatchSampler(PatchSampler):
+    def __init__(self, patch_size: Union[int, Iterable[int], dict], centroids, **kwargs):
+        super(CentroidPatchSampler, self).__init__(patch_size, **kwargs)
+        self.centroids = centroids
+
+    def _get_centroid_toplefts(self) -> np.ndarray:
+
+        # Since the centroid is in the centre of the patch, we 
+        # divide the patch by 2 to find the top and left indices
+        half_patch = np.divide(list(self._patch_size.values()), 2)
+
+        centroid_toplefts = np.subtract(
+            self.centroids, 
+            half_patch,
+        ).round(0).astype(int)
+
+        return centroid_toplefts
+
+    def compute_chunks(self, 
+        image_collection: ImageCollection
+        ) -> Iterable[dict]:
+        
+        image = image_collection.collection[image_collection.reference_mode]
+
+        image_size = {ax: s for ax, s in zip(image.axes, image.shape)}
+
+        centroid_toplefts = self._get_centroid_toplefts()
+
+        chunk_tlbr = {ax: slice(None) for ax in self.spatial_axes}
+
+        # This computes a chunk size in terms of the patch size instead of the
+        # original array chunk size.
+        spatial_chunk_sizes = {
+            ax: (self._stride[ax]
+                 * max(1, math.ceil(chk / self._stride[ax])))
+            for ax, chk in zip(image.axes, image.chunk_size)
+            if ax in self.spatial_axes
+        }
+
+        self._max_chunk_size = {
+            ax: (min(max(self._max_chunk_size[ax],
+                         spatial_chunk_sizes[ax]),
+                     image_size[ax]))
+            if ax in image.axes else 1
+            for ax in self.spatial_axes
+        }
+
+        chunk_slices = self._compute_toplefts_slices(
+            chunk_tlbr,
+            valid_mask_toplefts=centroid_toplefts,
+            patch_size=self._max_chunk_size
+        )
+
+        return chunk_slices
+
+
+    def compute_patches(
+        self, 
+        image_collection: ImageCollection,
+        chunk_tlbr: dict
+        ) -> Iterable[dict]:
+
+        image = image_collection.collection[image_collection.reference_mode]
+
+        image_size = {ax: s for ax, s in zip(image.axes, image.shape)}
+
+        centroid_toplefts = self._get_centroid_toplefts()
+
+        pad = {
+            ax: self._pad.get(ax, 0) if image_size.get(ax, 1) > 1 else 0
+            for ax in self.spatial_axes
+        }
+
+        patch_size = {
+            ax: self._patch_size.get(ax, 1) if image_size.get(ax, 1) > 1 else 1
+            for ax in self.spatial_axes
+        }
+        
+        chunk_tlbr = {ax: slice(None) for ax in self.spatial_axes}
+
+        patches_slices = self._compute_toplefts_slices(
+            chunk_tlbr,
+            valid_mask_toplefts=centroid_toplefts,
+            patch_size=patch_size,
+            pad=pad
+        )
+
+        return patches_slices
